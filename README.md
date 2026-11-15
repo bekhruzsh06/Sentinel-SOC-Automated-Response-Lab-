@@ -86,7 +86,7 @@ To validate the pipeline, an offensive simulation was run from a Kali Linux mach
 hydra -l hacker -P /usr/share/seclists/Passwords/Common-Credentials/best15.txt rdp://<HONEYPOT_IP> -t 1 -W 3 -V
 ```
 
-A key finding came out of this phase: my own Hydra attempts reached the logs but did **not** raise a dedicated incident, because my egress rotated across several source IPs in the same subnet, so no single IP crossed the rule's `>= 10` threshold. The rule still fired reliably on the genuine single-source internet scanners. This is a real limitation of single-IP threshold aggregation (blind to distributed / rotating-source and low-and-slow attacks), discussed with tuning ideas in [docs/04-attack-simulation.md](docs/04-attack-simulation.md).
+A key finding came out of this phase. My **first** Hydra runs reached the logs but did **not** raise a dedicated incident: my egress rotated across several source IPs in the same subnet, so no single IP crossed the rule's `>= 10` threshold. After **pinning the egress to a single IP** and re-running, the rule fired on my own attack and generated incident #1134, correctly enriched with the attacker IP, the `hacker` account and the host. This confirmed both the detection and its limitation — single-IP threshold aggregation is blind to distributed / rotating-source and low-and-slow attacks. Full write-up and tuning ideas in [docs/04-attack-simulation.md](docs/04-attack-simulation.md).
 
 ## Challenges & Lessons Learned
 
