@@ -1,0 +1,3 @@
+// Show only failed logon attempts (Event ID 4625)
+SecurityEvent
+| where EventID == 4625

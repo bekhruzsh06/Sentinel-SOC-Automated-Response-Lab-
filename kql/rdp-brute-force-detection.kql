@@ -1,0 +1,10 @@
+// [RDP Brute Force Detection] High Volume Failed Logins
+// Used as a Sentinel scheduled analytics rule: runs every 5 minutes, looks back 5 minutes
+// MITRE ATT&CK: Credential Access (TA0006) > Brute Force (T1110)
+SecurityEvent
+| where EventID == 4625
+| where LogonType == 3 // Type 3 is Network logon (RDP)
+| summarize FailedLogonCount = count() by IpAddress, Computer, Account
+| where FailedLogonCount >= 10
+| project TimeGenerated = now(), IpAddress, Computer, Account, FailedLogonCount
+| sort by FailedLogonCount desc
