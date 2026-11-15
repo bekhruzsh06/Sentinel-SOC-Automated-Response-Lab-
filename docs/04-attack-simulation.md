@@ -16,7 +16,7 @@ hydra -l hacker -P /usr/share/seclists/Passwords/Common-Credentials/best15.txt r
 
 ![Hydra brute-force run](../images/04-attack-simulation/01-hydra-attack.png)
 
-All 15 attempts completed and, as expected for a honeypot with no valid credentials, `0 valid password found`. I repeated the run several times to try to push the detection over its threshold.
+All 15 attempts completed and, as expected for a honeypot with no valid credentials, `0 valid password found`. I repeated the run several times while tuning the parallelism and the source address (see the finding below).
 
 ### Step 2: Confirm the Attack Reached the Telemetry
 
@@ -44,18 +44,21 @@ The linked automation rule then ran the `Post-Alert-to-Slack` playbook, deliveri
 
 ![Automated Slack alert](../images/04-attack-simulation/04-slack-alert.png)
 
-### Lesson Learned: Threshold Aggregation Has a Blind Spot
+### Finding: The Threshold Has a Source-IP Blind Spot
 
-My own Hydra runs showed up in the logs but did **not** raise their own dedicated incident. The reason is visible in the Logs screenshot above: the test account `hacker` appears from **more than one source IP in the same `94.119.32.x` block** (e.g. `94.119.x.x` on consecutive attempts). My egress was rotating across an address pool, so the 15 attempts were split across several IPs.
+My **first** Hydra runs showed up in the logs but did **not** raise their own dedicated incident. The reason was visible in the Logs: the test account `hacker` appeared from **more than one source IP in the same `94.119.32.x` block** on consecutive attempts. My egress was rotating across an address pool, so the 15 attempts were split across several IPs. The rule aggregates with `summarize ... by IpAddress`, so no single IP reached the `>= 10` threshold, and the rule stayed quiet on my traffic while still firing on the single-source scanners.
 
-The detection rule aggregates with `summarize ... by IpAddress`, so no single source IP reached the `>= 10` threshold, and the rule stayed quiet on my traffic while still firing on the single-source scanners.
+This is a realistic detection-engineering limitation: a threshold keyed on a single source IP is **blind to low-and-slow and distributed / rotating-source** brute-forcing. It works well against noisy, single-source automated scanners, which is exactly what the honeypot attracts most of.
 
-This is a realistic detection-engineering limitation:
+### Confirming the Fix: Pinning the Source IP
 
-- A threshold keyed on a single source IP is **blind to low-and-slow and distributed / rotating-source** brute-forcing.
-- It works well against noisy, single-source automated scanners — which is exactly what the honeypot attracts most of.
+To validate that reading, I pinned my egress to a **single IP (`134.151.21.40`)** and re-ran Hydra. This time every attempt came from the one address and crossed the threshold, and the rule fired on **my own attack** — incident **#1134**, correctly mapped to the IP, the `-\hacker` account and the host, under Credential Access:
 
-**How I would tune it next:**
+![Hacker incident triggered by the pinned-IP run](../images/04-attack-simulation/05-hacker-incident.png)
+
+So the rule behaves exactly as designed: it reliably catches high-volume brute force from a **single source**, and the gap is specifically **rotating / distributed** sources.
+
+**How I would tune it next to close that gap:**
 
 - Also aggregate by **targeted account** (`by Account`), to catch password spraying where one account is hit from many IPs.
 - Add a **total-volume-per-account** or **distinct-source-IP-count** condition.
